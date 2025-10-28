@@ -1,0 +1,71 @@
+import streamlit as st
+from langchain.vectorstores import Chroma
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.document_loaders import TextLoader
+from langchain.llms import OpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+import os
+
+# -------------------------------
+# 🔑 Set your OpenAI API key
+# -------------------------------
+os.environ["OPENAI_API_KEY"] = "your-openai-api-key"
+
+# -------------------------------
+# 📁 Load and Embed Portfolio
+# -------------------------------
+def load_portfolio():
+    loader = TextLoader("portfolio.txt")  # Ensure this file exists
+    documents = loader.load()
+    embedding = OpenAIEmbeddings()
+    db = Chroma.from_documents(documents, embedding)
+    return db
+
+# -------------------------------
+# ✍️ Email Generation Chain
+# -------------------------------
+def get_email_chain():
+    template = """
+    You are an expert email writer. Write a professional cold email applying for the following job:
+
+    Job Description: {job_description}
+
+    Relevant Portfolio Highlights: {portfolio_data}
+
+    Make it concise, enthusiastic, and tailored to the job.
+    """
+    prompt = PromptTemplate(
+        input_variables=["job_description", "portfolio_data"],
+        template=template
+    )
+    llm = OpenAI(temperature=0.7)
+    chain = LLMChain(llm=llm, prompt=prompt)
+    return chain
+
+# -------------------------------
+# 🌐 Streamlit UI
+# -------------------------------
+def main():
+    st.set_page_config(page_title="Cold Email Generator", layout="centered")
+    st.title("📧 AI-Powered Cold Email Generator")
+    st.markdown("Generate personalized cold emails for job applications using your portfolio and job descriptions.")
+
+    job_description = st.text_area("📝 Paste the Job Description", height=200)
+    portfolio_query = st.text_input("🔍 Enter keywords from your portfolio")
+
+    if st.button("🚀 Generate Email"):
+        with st.spinner("Generating your email..."):
+            db = load_portfolio()
+            results = db.similarity_search(portfolio_query, k=3)
+            portfolio_data = "\n".join([doc.page_content for doc in results])
+            chain = get_email_chain()
+            email = chain.run(job_description=job_description, portfolio_data=portfolio_data)
+            st.subheader("📨 Generated Email")
+            st.write(email)
+
+    st.markdown("---")
+    st.markdown("ℹ️ Make sure your `portfolio.txt` file is in the same directory as this app.")
+
+if __name__ == "__main__":
+    main()
